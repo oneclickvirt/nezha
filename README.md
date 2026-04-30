@@ -27,24 +27,24 @@
 Dashboard release assets are now published from this repository. Download the dashboard installer from the `v0-final` branch, then use `install` for a new deployment or `upgrade` for an existing one. The installer itself uses the same spiritlhl CDN acceleration pattern as `oneclickvirt/oneclickvirt` for release assets and repository templates, and falls back to raw GitHub sources when needed.
 
 ```bash
-curl -fsSL https://cdn.spiritlhl.net/https://github.com/oneclickvirt/nezha/blob/v0-final/script/install.sh -o install.sh
-chmod +x install.sh
-sudo ./install.sh
+curl -fsSL https://cdn.spiritlhl.net/https://github.com/oneclickvirt/nezha/blob/v0-final/script/install-dashboard.sh -o install-dashboard.sh
+chmod +x install-dashboard.sh
+sudo ./install-dashboard.sh
 ```
 
 Upgrade an existing dashboard installation with the same script:
 
 ```bash
-curl -fsSL https://cdn.spiritlhl.net/https://github.com/oneclickvirt/nezha/blob/v0-final/script/install.sh -o install.sh
-chmod +x install.sh
-sudo ./install.sh upgrade
+curl -fsSL https://cdn.spiritlhl.net/https://github.com/oneclickvirt/nezha/blob/v0-final/script/install-dashboard.sh -o install-dashboard.sh
+chmod +x install-dashboard.sh
+sudo ./install-dashboard.sh upgrade
 ```
 
 You can pin a specific release with `INSTALL_VERSION=vX.Y.Z` for both install and upgrade:
 
 ```bash
-sudo INSTALL_VERSION=vX.Y.Z ./install.sh install
-sudo INSTALL_VERSION=vX.Y.Z ./install.sh upgrade
+sudo INSTALL_VERSION=vX.Y.Z ./install-dashboard.sh install
+sudo INSTALL_VERSION=vX.Y.Z ./install-dashboard.sh upgrade
 ```
 
 You can also provide config values non-interactively through environment variables such as `NZ_ADMIN_LOGINS`, `NZ_OAUTH2_CLIENT_ID`, `NZ_OAUTH2_CLIENT_SECRET`, `NZ_GRPC_HOST`, and `NZ_ENABLE_TLS`.
