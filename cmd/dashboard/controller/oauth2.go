@@ -7,30 +7,34 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/naiba/nezha/pkg/oidc/cloudflare"
-	myOidc "github.com/naiba/nezha/pkg/oidc/general"
+	"github.com/oneclickvirt/nezha/pkg/oidc/cloudflare"
+	myOidc "github.com/oneclickvirt/nezha/pkg/oidc/general"
 
 	"code.gitea.io/sdk/gitea"
 	"github.com/gin-gonic/gin"
 	GitHubAPI "github.com/google/go-github/v47/github"
-	"github.com/naiba/nezha/model"
-	"github.com/naiba/nezha/pkg/mygin"
-	"github.com/naiba/nezha/pkg/utils"
-	"github.com/naiba/nezha/service/singleton"
+	"github.com/oneclickvirt/nezha/model"
+	"github.com/oneclickvirt/nezha/pkg/mygin"
+	"github.com/oneclickvirt/nezha/pkg/utils"
+	"github.com/oneclickvirt/nezha/service/singleton"
 	"github.com/patrickmn/go-cache"
 	"github.com/xanzy/go-gitlab"
 	"golang.org/x/oauth2"
 	GitHubOauth2 "golang.org/x/oauth2/github"
 	GitlabOauth2 "golang.org/x/oauth2/gitlab"
+	"gorm.io/gorm"
 )
 
 type oauth2controller struct {
 	r            gin.IRoutes
 	oidcProvider *oidc.Provider
 }
+
+var oauth2UserPersistLock sync.Mutex
 
 func (oa *oauth2controller) serve() {
 	oa.r.GET("/oauth2/login", oa.login)
@@ -116,17 +120,13 @@ func (oa *oauth2controller) getCommonOauth2Config(c *gin.Context) *oauth2.Config
 			ClientSecret: singleton.Conf.Oauth2.ClientSecret,
 			Scopes:       []string{},
 			Endpoint:     GitHubOauth2.Endpoint,
+			RedirectURL:  oa.getRedirectURL(c),
 		}
 	}
 }
 
 func (oa *oauth2controller) getRedirectURL(c *gin.Context) string {
-	scheme := "http://"
-	referer := c.Request.Referer()
-	if forwardedProto := c.Request.Header.Get("X-Forwarded-Proto"); forwardedProto == "https" || strings.HasPrefix(referer, "https://") {
-		scheme = "https://"
-	}
-	return scheme + c.Request.Host + "/oauth2/callback"
+	return oa.getRequestScheme(c) + c.Request.Host + "/oauth2/callback"
 }
 
 func (oa *oauth2controller) login(c *gin.Context) {
@@ -141,28 +141,56 @@ func (oa *oauth2controller) login(c *gin.Context) {
 	}
 	state, stateKey := randomString[:16], randomString[16:]
 	singleton.Cache.Set(fmt.Sprintf("%s%s", model.CacheKeyOauth2State, stateKey), state, cache.DefaultExpiration)
-	url := oa.getCommonOauth2Config(c).AuthCodeURL(state, oauth2.AccessTypeOnline)
-	c.SetCookie(singleton.Conf.Site.CookieName+"-sk", stateKey, 60*5, "", "", false, false)
+	oauth2Config := oa.getCommonOauth2Config(c)
+	if oauth2Config == nil {
+		return
+	}
+	url := oauth2Config.AuthCodeURL(state, oauth2.AccessTypeOnline)
+	oa.setCookie(c, singleton.Conf.Site.CookieName+"-sk", stateKey, 60*5)
 	c.HTML(http.StatusOK, "dashboard-"+singleton.Conf.Site.DashboardTheme+"/redirect", mygin.CommonEnvironment(c, gin.H{
 		"URL": url,
 	}))
 }
 
 func (oa *oauth2controller) callback(c *gin.Context) {
+	if oauth2Error := strings.TrimSpace(c.Query("error")); oauth2Error != "" {
+		msg := oauth2Error
+		if description := strings.TrimSpace(c.Query("error_description")); description != "" {
+			msg = fmt.Sprintf("%s: %s", oauth2Error, description)
+		}
+		mygin.ShowErrorPage(c, mygin.ErrInfo{
+			Code:  http.StatusBadRequest,
+			Title: "登录失败",
+			Msg:   fmt.Sprintf("错误信息：%s", msg),
+		}, true)
+		return
+	}
+
 	var err error
 	// 验证登录跳转时的 State
 	stateKey, err := c.Cookie(singleton.Conf.Site.CookieName + "-sk")
+	oa.clearCookie(c, singleton.Conf.Site.CookieName+"-sk")
 	if err == nil {
-		state, ok := singleton.Cache.Get(fmt.Sprintf("%s%s", model.CacheKeyOauth2State, stateKey))
+		cacheKey := fmt.Sprintf("%s%s", model.CacheKeyOauth2State, stateKey)
+		state, ok := singleton.Cache.Get(cacheKey)
+		singleton.Cache.Delete(cacheKey)
 		if !ok || state.(string) != c.Query("state") {
 			err = errors.New("非法的登录方式")
 		}
 	}
 	oauth2Config := oa.getCommonOauth2Config(c)
+	if oauth2Config == nil {
+		return
+	}
 	ctx := context.Background()
 	var otk *oauth2.Token
 	if err == nil {
-		otk, err = oauth2Config.Exchange(ctx, c.Query("code"))
+		code := strings.TrimSpace(c.Query("code"))
+		if code == "" {
+			err = errors.New("缺少授权 code")
+		} else {
+			otk, err = oauth2Config.Exchange(ctx, code)
+		}
 	}
 
 	var user model.User
@@ -206,12 +234,12 @@ func (oa *oauth2controller) callback(c *gin.Context) {
 			userInfo, err := oa.oidcProvider.UserInfo(c.Request.Context(), oauth2.StaticTokenSource(otk))
 			if err == nil {
 				loginClaim := singleton.Conf.Oauth2.OidcLoginClaim
-				groupClain := singleton.Conf.Oauth2.OidcGroupClaim
+				groupClaim := singleton.Conf.Oauth2.OidcGroupClaim
 				adminGroups := strings.Split(singleton.Conf.Oauth2.AdminGroups, ",")
 				autoCreate := singleton.Conf.Oauth2.OidcAutoCreate
 				var oidceUserInfo *myOidc.UserInfo
 				if err := userInfo.Claims(&oidceUserInfo); err == nil {
-					user = oidceUserInfo.MapToNezhaUser(loginClaim, groupClain, adminGroups, autoCreate)
+					user = oidceUserInfo.MapToNezhaUser(loginClaim, groupClaim, adminGroups, autoCreate)
 				}
 			}
 		} else {
@@ -233,8 +261,22 @@ func (oa *oauth2controller) callback(c *gin.Context) {
 			}
 		}
 	}
+	if err == nil {
+		user.OAuth2Provider = oa.getOAuth2ProviderName()
+		if user.Name == "" {
+			user.Name = user.Login
+		}
+	}
 	if err == nil && user.Login == "" {
 		err = errors.New("获取用户信息失败")
+	}
+	var existingUser *model.User
+	if err == nil {
+		existingUser, err = oa.findExistingOAuth2UserTx(singleton.DB, user)
+		if err == nil && existingUser != nil {
+			user.ID = existingUser.ID
+			user.SuperAdmin = user.SuperAdmin || existingUser.SuperAdmin
+		}
 	}
 
 	if err != nil || user.Login == "" {
@@ -275,11 +317,158 @@ func (oa *oauth2controller) callback(c *gin.Context) {
 		return
 	}
 	user.TokenExpired = time.Now().AddDate(0, 2, 0)
-	singleton.DB.Save(&user)
-	c.SetCookie(singleton.Conf.Site.CookieName, user.Token, 60*60*24, "", "", false, false)
+	savedUser, err := oa.persistOAuth2User(&user)
+	if err != nil {
+		mygin.ShowErrorPage(c, mygin.ErrInfo{
+			Code:  http.StatusBadRequest,
+			Title: "登录失败",
+			Msg:   fmt.Sprintf("错误信息：%s", err),
+		}, true)
+		return
+	}
+	user = *savedUser
+	oa.setCookie(c, singleton.Conf.Site.CookieName, user.Token, 60*60*24)
 	c.HTML(http.StatusOK, "dashboard-"+singleton.Conf.Site.DashboardTheme+"/redirect", mygin.CommonEnvironment(c, gin.H{
 		"URL": "/",
 	}))
+}
+
+func (oa *oauth2controller) getRequestScheme(c *gin.Context) string {
+	if c.Request.TLS != nil {
+		return "https://"
+	}
+	referer := c.Request.Referer()
+	if forwardedProto := c.Request.Header.Get("X-Forwarded-Proto"); forwardedProto == "https" || strings.HasPrefix(referer, "https://") {
+		return "https://"
+	}
+	return "http://"
+}
+
+func (oa *oauth2controller) shouldSecureCookie(c *gin.Context) bool {
+	return oa.getRequestScheme(c) == "https://"
+}
+
+func (oa *oauth2controller) setCookie(c *gin.Context, name string, value string, maxAge int) {
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(name, value, maxAge, "/", "", oa.shouldSecureCookie(c), true)
+}
+
+func (oa *oauth2controller) clearCookie(c *gin.Context, name string) {
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(name, "", -1, "/", "", oa.shouldSecureCookie(c), true)
+}
+
+func (oa *oauth2controller) getOAuth2ProviderName() string {
+	switch singleton.Conf.Oauth2.Type {
+	case model.ConfigTypeGitee:
+		return "gitee"
+	case model.ConfigTypeGitlab:
+		return "gitlab"
+	case model.ConfigTypeJihulab:
+		return "jihulab"
+	case model.ConfigTypeGitea:
+		return "gitea"
+	case model.ConfigTypeCloudflare:
+		return "cloudflare"
+	case model.ConfigTypeOidc:
+		return "oidc"
+	default:
+		return "github"
+	}
+}
+
+func (oa *oauth2controller) persistOAuth2User(user *model.User) (*model.User, error) {
+	oauth2UserPersistLock.Lock()
+	defer oauth2UserPersistLock.Unlock()
+
+	var savedUser model.User
+	err := singleton.DB.Transaction(func(tx *gorm.DB) error {
+		existingUser, err := oa.findExistingOAuth2UserTx(tx, *user)
+		if err != nil {
+			return err
+		}
+		if existingUser == nil {
+			if err := tx.Create(user).Error; err != nil {
+				return err
+			}
+			savedUser = *user
+			return nil
+		}
+
+		user.ID = existingUser.ID
+		user.SuperAdmin = user.SuperAdmin || existingUser.SuperAdmin
+		if err := oa.saveOAuth2UserTx(tx, existingUser, user); err != nil {
+			return err
+		}
+		savedUser = *existingUser
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &savedUser, nil
+}
+
+func (oa *oauth2controller) findExistingOAuth2UserTx(db *gorm.DB, user model.User) (*model.User, error) {
+	var existing model.User
+	if user.OAuth2Provider != "" && user.OAuth2UID != "" {
+		err := db.Where("oauth2_provider = ? AND oauth2_uid = ?", user.OAuth2Provider, user.OAuth2UID).First(&existing).Error
+		switch {
+		case err == nil:
+			return &existing, nil
+		case !errors.Is(err, gorm.ErrRecordNotFound):
+			return nil, err
+		}
+	}
+
+	err := db.Where("LOWER(login) = LOWER(?)", user.Login).First(&existing).Error
+	switch {
+	case err == nil:
+		if existing.OAuth2Provider != "" && existing.OAuth2Provider != user.OAuth2Provider {
+			return nil, fmt.Errorf("登录名 %s 已绑定到其他 OAuth2 提供方", user.Login)
+		}
+		if existing.OAuth2UID != "" && user.OAuth2UID != "" && existing.OAuth2UID != user.OAuth2UID {
+			return nil, fmt.Errorf("登录名 %s 已绑定到其他 OAuth2 账号", user.Login)
+		}
+		return &existing, nil
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		return nil, nil
+	default:
+		return nil, err
+	}
+}
+
+func (oa *oauth2controller) saveOAuth2UserTx(db *gorm.DB, existingUser *model.User, user *model.User) error {
+	if existingUser == nil {
+		return db.Create(user).Error
+	}
+
+	existingUser.Login = user.Login
+	if user.AvatarURL != "" {
+		existingUser.AvatarURL = user.AvatarURL
+	}
+	if user.Name != "" {
+		existingUser.Name = user.Name
+	}
+	if user.Blog != "" {
+		existingUser.Blog = user.Blog
+	}
+	if user.Email != "" {
+		existingUser.Email = user.Email
+	}
+	existingUser.Hireable = user.Hireable
+	if user.Bio != "" {
+		existingUser.Bio = user.Bio
+	}
+	existingUser.OAuth2Provider = user.OAuth2Provider
+	if user.OAuth2UID != "" {
+		existingUser.OAuth2UID = user.OAuth2UID
+	}
+	existingUser.SuperAdmin = existingUser.SuperAdmin || user.SuperAdmin
+	existingUser.Token = user.Token
+	existingUser.TokenExpired = user.TokenExpired
+
+	return db.Save(existingUser).Error
 }
 
 func removeDuplicates(elements []string) []string {

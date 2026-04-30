@@ -8,8 +8,8 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"github.com/naiba/nezha/model"
-	"github.com/naiba/nezha/pkg/utils"
+	"github.com/oneclickvirt/nezha/model"
+	"github.com/oneclickvirt/nezha/pkg/utils"
 )
 
 var Version = "debug"
@@ -73,11 +73,10 @@ func InitDBFromPath(path string) {
 
 // RecordTransferHourlyUsage 对流量记录进行打点
 func RecordTransferHourlyUsage() {
-	ServerLock.Lock()
-	defer ServerLock.Unlock()
 	now := time.Now()
 	nowTrimSeconds := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, now.Location())
 	var txs []model.Transfer
+	ServerLock.Lock()
 	for id, server := range ServerList {
 		tx := model.Transfer{
 			ServerID: id,
@@ -92,10 +91,11 @@ func RecordTransferHourlyUsage() {
 		tx.CreatedAt = nowTrimSeconds
 		txs = append(txs, tx)
 	}
+	ServerLock.Unlock()
 	if len(txs) == 0 {
 		return
 	}
-	log.Println("NEZHA>> Cron 流量统计入库", len(txs), DB.Create(txs).Error)
+	log.Println("NEZHA>> Cron 流量统计入库", len(txs), DB.Create(&txs).Error)
 }
 
 // CleanMonitorHistory 清理无效或过时的 监控记录 和 流量记录

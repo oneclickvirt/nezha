@@ -17,13 +17,13 @@ import (
 	"github.com/hashicorp/go-uuid"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
 
-	"github.com/naiba/nezha/model"
-	"github.com/naiba/nezha/pkg/mygin"
-	"github.com/naiba/nezha/pkg/utils"
-	"github.com/naiba/nezha/proto"
-	"github.com/naiba/nezha/resource"
-	"github.com/naiba/nezha/service/rpc"
-	"github.com/naiba/nezha/service/singleton"
+	"github.com/oneclickvirt/nezha/model"
+	"github.com/oneclickvirt/nezha/pkg/mygin"
+	"github.com/oneclickvirt/nezha/pkg/utils"
+	"github.com/oneclickvirt/nezha/proto"
+	"github.com/oneclickvirt/nezha/resource"
+	"github.com/oneclickvirt/nezha/service/rpc"
+	"github.com/oneclickvirt/nezha/service/singleton"
 )
 
 func ServeWeb(port uint) *http.Server {

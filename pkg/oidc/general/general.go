@@ -1,8 +1,11 @@
 package general
 
 import (
-	"github.com/naiba/nezha/model"
-	"github.com/naiba/nezha/service/singleton"
+	"errors"
+
+	"github.com/oneclickvirt/nezha/model"
+	"github.com/oneclickvirt/nezha/service/singleton"
+	"gorm.io/gorm"
 )
 
 type UserInfo struct {
@@ -15,7 +18,6 @@ type UserInfo struct {
 }
 
 func (u UserInfo) MapToNezhaUser(loginClaim string, groupClaim string, adminGroups []string, autoCreate bool) model.User {
-	var user model.User
 	var login string
 	var groups []string
 	var isAdmin bool
@@ -42,15 +44,28 @@ func (u UserInfo) MapToNezhaUser(loginClaim string, groupClaim string, adminGrou
 			break
 		}
 	}
-	result := singleton.DB.Where("login = ?", login).First(&user)
-	user.Login = login
-	user.Email = u.Email
-	user.Name = u.Name
-	user.SuperAdmin = isAdmin
-	if result.Error != nil && autoCreate {
-		singleton.DB.Create(&user)
-	} else if result.Error != nil {
+	user := model.User{
+		Login:      login,
+		Email:      u.Email,
+		Name:       u.Name,
+		SuperAdmin: isAdmin,
+		OAuth2UID:  u.Sub,
+	}
+	if user.Name == "" {
+		user.Name = user.Login
+	}
+	if autoCreate || user.Login == "" {
+		return user
+	}
+
+	var existing model.User
+	if err := singleton.DB.Where("LOWER(login) = LOWER(?)", login).First(&existing).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return model.User{}
+		}
 		return model.User{}
 	}
+	user.ID = existing.ID
+	user.SuperAdmin = user.SuperAdmin || existing.SuperAdmin
 	return user
 }

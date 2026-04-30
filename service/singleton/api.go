@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/naiba/nezha/model"
-	"github.com/naiba/nezha/pkg/utils"
+	"github.com/oneclickvirt/nezha/model"
+	"github.com/oneclickvirt/nezha/pkg/utils"
 )
 
 var (

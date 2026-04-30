@@ -3,7 +3,7 @@ package resource
 import (
 	"embed"
 
-	"github.com/naiba/nezha/pkg/utils"
+	"github.com/oneclickvirt/nezha/pkg/utils"
 )
 
 var StaticFS *utils.HybridFS

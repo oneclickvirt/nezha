@@ -7,8 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/naiba/nezha/model"
-	"github.com/naiba/nezha/service/singleton"
+	"github.com/oneclickvirt/nezha/model"
+	"github.com/oneclickvirt/nezha/service/singleton"
 )
 
 type AuthorizeOption struct {

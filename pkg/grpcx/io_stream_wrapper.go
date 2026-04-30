@@ -5,7 +5,7 @@ import (
 	"io"
 	"sync/atomic"
 
-	"github.com/naiba/nezha/proto"
+	"github.com/oneclickvirt/nezha/proto"
 )
 
 var _ io.ReadWriteCloser = &IOStreamWrapper{}

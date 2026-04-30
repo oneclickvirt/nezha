@@ -8,11 +8,11 @@ import (
 	"time"
 	_ "time/tzdata"
 
-	"github.com/naiba/nezha/cmd/dashboard/controller"
-	"github.com/naiba/nezha/cmd/dashboard/rpc"
-	"github.com/naiba/nezha/model"
-	"github.com/naiba/nezha/proto"
-	"github.com/naiba/nezha/service/singleton"
+	"github.com/oneclickvirt/nezha/cmd/dashboard/controller"
+	"github.com/oneclickvirt/nezha/cmd/dashboard/rpc"
+	"github.com/oneclickvirt/nezha/model"
+	"github.com/oneclickvirt/nezha/proto"
+	"github.com/oneclickvirt/nezha/service/singleton"
 	"github.com/ory/graceful"
 	flag "github.com/spf13/pflag"
 )

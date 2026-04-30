@@ -2,6 +2,7 @@ package ddns
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -37,6 +38,9 @@ func TestSplitDomainSOA(t *testing.T) {
 	for _, c := range cases {
 		prefix, zone, err := splitDomainSOA(c.domain)
 		if err != nil {
+			if isDNSEnvironmentError(err) {
+				t.Skipf("Skipping external DNS dependent test: %v", err)
+			}
 			t.Fatalf("Error: %s", err)
 		}
 		if prefix != c.prefix {
@@ -46,4 +50,15 @@ func TestSplitDomainSOA(t *testing.T) {
 			t.Fatalf("Expected zone %s, but got %s", c.zone, zone)
 		}
 	}
+}
+
+func isDNSEnvironmentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "i/o timeout") ||
+		strings.Contains(msg, "network is unreachable") ||
+		strings.Contains(msg, "no route to host")
 }

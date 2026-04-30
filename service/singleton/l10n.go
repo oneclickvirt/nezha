@@ -7,8 +7,8 @@ import (
 	"github.com/nicksnyder/go-i18n/v2/i18n"
 	"golang.org/x/text/language"
 
-	"github.com/naiba/nezha/model"
-	"github.com/naiba/nezha/resource"
+	"github.com/oneclickvirt/nezha/model"
+	"github.com/oneclickvirt/nezha/resource"
 )
 
 var Localizer *i18n.Localizer

@@ -25,9 +25,6 @@ jobs:
     env:
       GOOS: ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
-      GOARM: ${{ matrix.goarm }}
-    outputs:
-      tag_name: ${{ steps.extract_branch.outputs.tag }}
     steps:
       - run: git config --global --add safe.directory /__w/nezha/nezha
       - uses: actions/checkout@v4
@@ -72,12 +69,12 @@ jobs:
 
       - name: Archive and compress binaries
         run: |
-          find assets/*/*/* -type f | while read -r file; do
-            chmod +x $file
+          find assets -type f ! -name '*.zip' | while read -r file; do
+            chmod +x "$file" 2>/dev/null || true
             dir=$(dirname "$file")
             filename=$(basename "$file")
             fileWithoutExt="${filename%.*}"
-            zip -jr "$dir/$fileWithoutExt.zip" "$file"
+            zip -jqr "$dir/$fileWithoutExt.zip" "$file"
           done
 
       - name: Release
@@ -85,18 +82,25 @@ jobs:
         with:
           artifacts: "assets/*/*/*.zip"
           generateReleaseNotes: true
+          allowUpdates: true
+          replacesArtifacts: true
 
       - name: Purge jsdelivr cache
         run: |
-          curl -s https://purge.jsdelivr.net/gh/${{ github.repository_owner }}/nezha@master/script/install.sh
-          curl -s https://purge.jsdelivr.net/gh/${{ github.repository_owner }}/nezha@master/script/nezha-agent.service
-          curl -s https://purge.jsdelivr.net/gh/${{ github.repository_owner }}/nezha@master/script/docker-compose.yaml
-          curl -s https://purge.jsdelivr.net/gh/${{ github.repository_owner }}/nezha@master/script/config.yaml
-          LOWER_USERNAME=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          curl -s https://purge.jsdelivr.net/gh/$LOWER_USERNAME/nezha@master/script/install.sh
-          curl -s https://purge.jsdelivr.net/gh/$LOWER_USERNAME/nezha@master/script/nezha-agent.service
-          curl -s https://purge.jsdelivr.net/gh/$LOWER_USERNAME/nezha@master/script/docker-compose.yaml
-          curl -s https://purge.jsdelivr.net/gh/$LOWER_USERNAME/nezha@master/script/config.yaml
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          for file in \
+            script/install.sh \
+            script/install_en.sh \
+            script/install.command \
+            script/install.ps1 \
+            script/install-agent.sh \
+            script/install-dashboard.sh \
+            script/nezha-dashboard \
+            script/nezha-dashboard.service \
+            script/docker-compose.yaml \
+            script/config.yaml; do
+            curl -fsSL "https://purge.jsdelivr.net/gh/${REPO_LOWER}@master/${file}" >/dev/null || true
+          done
 
       - name: Trigger sync
         env:

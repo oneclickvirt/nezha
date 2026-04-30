@@ -1,8 +1,7 @@
 package cloudflare
 
 import (
-	"github.com/naiba/nezha/model"
-	"github.com/naiba/nezha/service/singleton"
+	"github.com/oneclickvirt/nezha/model"
 )
 
 type UserInfo struct {
@@ -13,10 +12,17 @@ type UserInfo struct {
 }
 
 func (u UserInfo) MapToNezhaUser() model.User {
-	var user model.User
-	singleton.DB.Where("login = ?", u.Sub).First(&user)
-	user.Login = u.Sub
-	user.Email = u.Email
-	user.Name = u.Name
+	user := model.User{
+		Login:     u.Sub,
+		Email:     u.Email,
+		Name:      u.Name,
+		OAuth2UID: u.Sub,
+	}
+	if user.Login == "" {
+		user.Login = user.Email
+	}
+	if user.Name == "" {
+		user.Name = user.Login
+	}
 	return user
 }

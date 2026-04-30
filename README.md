@@ -4,7 +4,7 @@
   <br>
   <small><i>LOGO designed by <a href="https://xio.ng" target="_blank">熊大</a> .</i></small>
   <br><br>
-<img alt="GitHub release (with filter)" src="https://img.shields.io/github/v/release/naiba/nezha?color=brightgreen&style=for-the-badge&logo=github&label=Dashboard">&nbsp;<img src="https://img.shields.io/github/v/release/nezhahq/agent?color=brightgreen&label=Agent&style=for-the-badge&logo=github">&nbsp;<img src="https://img.shields.io/github/actions/workflow/status/nezhahq/agent/agent.yml?label=Agent%20CI&logo=github&style=for-the-badge">
+<img alt="GitHub release (with filter)" src="https://img.shields.io/github/v/release/oneclickvirt/nezha?color=brightgreen&style=for-the-badge&logo=github&label=Dashboard">&nbsp;<img src="https://img.shields.io/github/v/release/nezhahq/agent?color=brightgreen&label=Agent&style=for-the-badge&logo=github">&nbsp;<img src="https://img.shields.io/github/actions/workflow/status/nezhahq/agent/agent.yml?label=Agent%20CI&logo=github&style=for-the-badge">
   <br>
   <br>
   <p>:trollface: <b>Nezha Monitoring: Self-hostable, lightweight, servers and websites monitoring and O&M tool.</b></p>
@@ -21,6 +21,20 @@
 
 - [English](https://nezhahq.github.io/en_US/index.html)
 - [中文文档](https://nezhahq.github.io/index.html)
+
+## Install Dashboard
+
+Dashboard release assets are now published from this repository. The installer below resolves the latest dashboard tag through GitHub API endpoints first, then falls back to CDN version listings before downloading the matching release asset.
+
+```bash
+curl -fsSL https://cdn.jsdelivr.net/gh/oneclickvirt/nezha@master/script/install-dashboard.sh -o nezha-dashboard.sh
+chmod +x nezha-dashboard.sh
+sudo ./nezha-dashboard.sh
+```
+
+You can pin a specific release with `INSTALL_VERSION=vX.Y.Z`, and you can provide config values non-interactively through environment variables such as `NZ_ADMIN_LOGINS`, `NZ_OAUTH2_CLIENT_ID`, `NZ_OAUTH2_CLIENT_SECRET`, `NZ_GRPC_HOST`, and `NZ_ENABLE_TLS`.
+
+Agent install commands shown inside the dashboard now fetch scripts from this repository, but the downloaded agent binary still comes from the official `nezhahq/agent` release.
 
 ## Screenshots
 
@@ -103,4 +117,4 @@ You can change the dashboard language in the settings page (`/setting`) after th
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=naiba/nezha&type=Timeline)](https://star-history.com/#naiba/nezha&Timeline)
+[![Star History Chart](https://api.star-history.com/svg?repos=oneclickvirt/nezha&type=Timeline)](https://star-history.com/#oneclickvirt/nezha&Timeline)

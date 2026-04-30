@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,13 +16,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/naiba/nezha/model"
-	"github.com/naiba/nezha/pkg/mygin"
-	"github.com/naiba/nezha/pkg/utils"
-	"github.com/naiba/nezha/pkg/websocketx"
-	"github.com/naiba/nezha/proto"
-	"github.com/naiba/nezha/service/rpc"
-	"github.com/naiba/nezha/service/singleton"
+	"github.com/oneclickvirt/nezha/model"
+	"github.com/oneclickvirt/nezha/pkg/mygin"
+	"github.com/oneclickvirt/nezha/pkg/utils"
+	"github.com/oneclickvirt/nezha/pkg/websocketx"
+	"github.com/oneclickvirt/nezha/proto"
+	"github.com/oneclickvirt/nezha/service/rpc"
+	"github.com/oneclickvirt/nezha/service/singleton"
 )
 
 type commonPage struct {
@@ -75,8 +76,19 @@ func (p *commonPage) issueViewPassword(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	c.SetCookie(singleton.Conf.Site.CookieName+"-vp", string(hash), 60*60*24, "", "", false, false)
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(singleton.Conf.Site.CookieName+"-vp", string(hash), 60*60*24, "/", "", shouldSecureCookie(c), true)
 	c.Redirect(http.StatusFound, c.Request.Referer())
+}
+
+func shouldSecureCookie(c *gin.Context) bool {
+	if c.Request.TLS != nil {
+		return true
+	}
+	if strings.EqualFold(c.Request.Header.Get("X-Forwarded-Proto"), "https") {
+		return true
+	}
+	return strings.HasPrefix(c.Request.Referer(), "https://")
 }
 
 func (p *commonPage) service(c *gin.Context) {

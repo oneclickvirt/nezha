@@ -1,87 +1,141 @@
-#Get server and key
-param($server, $key, $tls)
-# Download latest release from github
-if($PSVersionTable.PSVersion.Major -lt 5){
-    Write-Host "Require PS >= 5,your PSVersion:"$PSVersionTable.PSVersion.Major -BackgroundColor DarkGreen -ForegroundColor White
-    Write-Host "Refer to the community article and install manually! https://nyko.me/2020/12/13/nezha-windows-client.html" -BackgroundColor DarkRed -ForegroundColor Green
-    exit
-}
-$agentrepo = "nezhahq/agent"
-#  x86 or x64 or arm64
-if ([System.Environment]::Is64BitOperatingSystem) {
-    if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
-        $file = "nezha-agent_windows_arm64.zip"
-    } else {
-        $file = "nezha-agent_windows_amd64.zip"
-    }
-}
-else {
-    $file = "nezha-agent_windows_386.zip"
-}
-$agentreleases = "https://api.github.com/repos/$agentrepo/releases"
-#重复运行自动更新
-if (Test-Path "C:\nezha\nezha-agent.exe") {
-    Write-Host "Nezha monitoring already exists, delete and reinstall" -BackgroundColor DarkGreen -ForegroundColor White
-    C:\nezha\nezha-agent.exe service uninstall
-    Remove-Item "C:\nezha" -Recurse
-}
-#TLS/SSL
-Write-Host "Determining latest nezha release" -BackgroundColor DarkGreen -ForegroundColor White
+param(
+    [string]$server,
+    [string]$key,
+    [string]$tls
+)
+
+$ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$agenttag = (Invoke-WebRequest -Uri $agentreleases -UseBasicParsing | ConvertFrom-Json)[0].tag_name
-if ([string]::IsNullOrWhiteSpace($agenttag)) {
-    $optionUrl = "https://fastly.jsdelivr.net/gh/nezhahq/agent/"
-    Try {
-        $response = Invoke-WebRequest -Uri $optionUrl -UseBasicParsing -TimeoutSec 10
-        if ($response.StatusCode -eq 200) {
-            $versiontext = $response.Content | findstr /c:"option.value"
-            $version = [regex]::Match($versiontext, "@(\d+\.\d+\.\d+)").Groups[1].Value
-            $agenttag = "v" + $version
+
+if ($PSVersionTable.PSVersion.Major -lt 5) {
+    Write-Host "PowerShell 5 or newer is required. Current version: $($PSVersionTable.PSVersion.Major)" -BackgroundColor DarkRed -ForegroundColor White
+    exit 1
+}
+
+$agentRepo = 'nezhahq/agent'
+$apiUrls = @(
+    'https://api.github.com',
+    'https://githubapi.spiritlhl.workers.dev',
+    'https://githubapi.spiritlhl.top'
+)
+$cdnUrls = @(
+    'https://cdn0.spiritlhl.top/',
+    'http://cdn3.spiritlhl.net/',
+    'http://cdn1.spiritlhl.net/',
+    'http://cdn2.spiritlhl.net/'
+)
+$jsdelivrUrls = @(
+    'https://cdn.jsdelivr.net/gh/nezhahq/agent/',
+    'https://fastly.jsdelivr.net/gh/nezhahq/agent/',
+    'https://gcore.jsdelivr.net/gh/nezhahq/agent/'
+)
+
+function Get-AgentArchiveName {
+    if ([System.Environment]::Is64BitOperatingSystem) {
+        if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
+            return 'nezha-agent_windows_arm64.zip'
         }
-    } Catch {
-        $optionUrl = "https://gcore.jsdelivr.net/gh/nezhahq/agent/"
-        $response = Invoke-WebRequest -Uri $optionUrl -UseBasicParsing -TimeoutSec 10
-        if ($response.StatusCode -eq 200) {
-            $versiontext = $response.Content | findstr /c:"option.value"
-            $version = [regex]::Match($versiontext, "@(\d+\.\d+\.\d+)").Groups[1].Value
-            $agenttag = "v" + $version
+        return 'nezha-agent_windows_amd64.zip'
+    }
+    return 'nezha-agent_windows_386.zip'
+}
+
+function Get-LatestVersion {
+    if ($env:INSTALL_VERSION) {
+        return $env:INSTALL_VERSION
+    }
+
+    foreach ($api in $apiUrls) {
+        try {
+            $response = Invoke-RestMethod -Uri "$api/repos/$agentRepo/releases/latest" -Headers @{ 'User-Agent' = 'oneclickvirt-nezha-installer' } -TimeoutSec 20
+            if ($response.tag_name) {
+                return $response.tag_name
+            }
+        }
+        catch {
         }
     }
-}
-#Region判断
-$ipapi = ""
-$region = "Unknown"
-foreach ($url in ("https://dash.cloudflare.com/cdn-cgi/trace","https://developers.cloudflare.com/cdn-cgi/trace","https://1.0.0.1/cdn-cgi/trace")) {
-    try {
-        $ipapi = Invoke-RestMethod -Uri $url -TimeoutSec 5 -UseBasicParsing
-        if ($ipapi -match "loc=(\w+)" ) {
-            $region = $Matches[1]
-            break
+
+    foreach ($url in $jsdelivrUrls) {
+        try {
+            $content = (Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10).Content
+            $match = [regex]::Match($content, [regex]::Escape($agentRepo) + '@([^''"" <]+)')
+            if ($match.Success) {
+                return $match.Groups[1].Value
+            }
+        }
+        catch {
         }
     }
-    catch {
-        Write-Host "Error occurred while querying $url : $_"
+
+    throw 'Unable to determine the latest agent version.'
+}
+
+function Download-FirstAvailable {
+    param(
+        [string[]]$Urls,
+        [string]$OutputPath
+    )
+
+    foreach ($url in $Urls) {
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $OutputPath -UseBasicParsing -TimeoutSec 120
+            if ((Test-Path $OutputPath) -and ((Get-Item $OutputPath).Length -gt 0)) {
+                return
+            }
+        }
+        catch {
+        }
     }
+
+    throw 'Failed to download the agent archive from all configured sources.'
 }
-echo $ipapi
-if($region -ne "CN"){
-$download = "https://github.com/$agentrepo/releases/download/$agenttag/$file"
-Write-Host "Location:$region,connect directly!" -BackgroundColor DarkRed -ForegroundColor Green
-}else{
-$download = "https://gitee.com/naibahq/agent/releases/download/$agenttag/$file"
-Write-Host "Location:CN,use mirror address" -BackgroundColor DarkRed -ForegroundColor Green
+
+if (-not $server) {
+    $server = Read-Host 'Dashboard gRPC host:port'
 }
-echo $download
-Invoke-WebRequest $download -OutFile "C:\nezha.zip"
-#解压
-Expand-Archive "C:\nezha.zip" -DestinationPath "C:\temp" -Force
-if (!(Test-Path "C:\nezha")) { New-Item -Path "C:\nezha" -type directory }
-#整理文件
-Move-Item -Path "C:\temp\nezha-agent.exe" -Destination "C:\nezha\nezha-agent.exe"
-#清理垃圾
-Remove-Item "C:\nezha.zip"
-Remove-Item "C:\temp" -Recurse
-#安装部分
-C:\nezha\nezha-agent.exe service install -s $server -p $key $tls
-#enjoy
-Write-Host "Enjoy It!" -BackgroundColor DarkGreen -ForegroundColor Red
+if (-not $key) {
+    $key = Read-Host 'Agent secret'
+}
+if (-not $server -or -not $key) {
+    Write-Host 'Dashboard gRPC host:port and agent secret are required.' -BackgroundColor DarkRed -ForegroundColor White
+    exit 1
+}
+
+$file = Get-AgentArchiveName
+$version = Get-LatestVersion
+$directUrl = "https://github.com/$agentRepo/releases/download/$version/$file"
+$downloadUrls = @()
+foreach ($cdn in $cdnUrls) {
+    $downloadUrls += "$cdn$directUrl"
+}
+$downloadUrls += $directUrl
+
+if (Test-Path 'C:\nezha\nezha-agent.exe') {
+    & 'C:\nezha\nezha-agent.exe' service uninstall | Out-Null
+    Remove-Item 'C:\nezha' -Recurse -Force
+}
+
+$zipPath = Join-Path $env:TEMP 'nezha-agent.zip'
+$extractPath = Join-Path $env:TEMP 'nezha-agent'
+if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+if (Test-Path $extractPath) { Remove-Item $extractPath -Recurse -Force }
+
+Download-FirstAvailable -Urls $downloadUrls -OutputPath $zipPath
+Expand-Archive $zipPath -DestinationPath $extractPath -Force
+
+if (!(Test-Path 'C:\nezha')) {
+    New-Item -Path 'C:\nezha' -ItemType Directory | Out-Null
+}
+
+Move-Item -Path (Join-Path $extractPath 'nezha-agent.exe') -Destination 'C:\nezha\nezha-agent.exe' -Force
+Remove-Item $zipPath -Force
+Remove-Item $extractPath -Recurse -Force
+
+$installArgs = @('service', 'install', '-s', $server, '-p', $key)
+if ($tls) {
+    $installArgs += $tls
+}
+& 'C:\nezha\nezha-agent.exe' @installArgs
+
+Write-Host "Agent installed successfully from official $agentRepo release $version." -BackgroundColor DarkGreen -ForegroundColor White

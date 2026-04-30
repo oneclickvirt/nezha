@@ -1,4 +1,4 @@
-module github.com/naiba/nezha
+module github.com/oneclickvirt/nezha
 
 go 1.21
 

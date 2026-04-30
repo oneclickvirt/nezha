@@ -7,10 +7,10 @@ import (
 	"github.com/libdns/cloudflare"
 	tencentcloud "github.com/nezhahq/libdns-tencentcloud"
 
-	"github.com/naiba/nezha/model"
-	ddns2 "github.com/naiba/nezha/pkg/ddns"
-	"github.com/naiba/nezha/pkg/ddns/dummy"
-	"github.com/naiba/nezha/pkg/ddns/webhook"
+	"github.com/oneclickvirt/nezha/model"
+	ddns2 "github.com/oneclickvirt/nezha/pkg/ddns"
+	"github.com/oneclickvirt/nezha/pkg/ddns/dummy"
+	"github.com/oneclickvirt/nezha/pkg/ddns/webhook"
 )
 
 var (
