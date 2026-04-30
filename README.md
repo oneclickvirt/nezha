@@ -24,27 +24,30 @@
 
 ## Install Dashboard
 
-Dashboard release assets are now published from this repository. The bootstrap command below follows the same acceleration pattern used in `oneclickvirt/oneclickvirt`: it tries the spiritlhl CDN gateways first, then falls back to the raw GitHub branch source on `v0-final`. The installer itself resolves the latest dashboard tag through GitHub API endpoints first, then falls back to CDN version listings before downloading the matching release asset.
+Dashboard release assets are now published from this repository. Download the dashboard installer from the `v0-final` branch, then use `install` for a new deployment or `upgrade` for an existing one. The installer itself uses the same spiritlhl CDN acceleration pattern as `oneclickvirt/oneclickvirt` for release assets and repository templates, and falls back to raw GitHub sources when needed.
 
 ```bash
-INSTALL_SH_URL='https://raw.githubusercontent.com/oneclickvirt/nezha/refs/heads/v0-final/script/install-dashboard.sh'
-for prefix in \
-  'https://cdn0.spiritlhl.top/' \
-  'http://cdn3.spiritlhl.net/' \
-  'http://cdn1.spiritlhl.net/' \
-  'http://cdn2.spiritlhl.net/' \
-  ''; do
-  if curl -fsSL "${prefix}${INSTALL_SH_URL}" -o nezha-dashboard.sh; then
-    chmod +x nezha-dashboard.sh
-    sudo ./nezha-dashboard.sh
-    exit 0
-  fi
-done
-echo 'Failed to download install-dashboard.sh from all configured sources.' >&2
-exit 1
+curl -fsSL https://raw.githubusercontent.com/oneclickvirt/nezha/refs/heads/v0-final/script/install-dashboard.sh -o nezha-dashboard.sh
+chmod +x nezha-dashboard.sh
+sudo ./nezha-dashboard.sh install
 ```
 
-You can pin a specific release with `INSTALL_VERSION=vX.Y.Z`, and you can provide config values non-interactively through environment variables such as `NZ_ADMIN_LOGINS`, `NZ_OAUTH2_CLIENT_ID`, `NZ_OAUTH2_CLIENT_SECRET`, `NZ_GRPC_HOST`, and `NZ_ENABLE_TLS`.
+Upgrade an existing dashboard installation with the same script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/oneclickvirt/nezha/refs/heads/v0-final/script/install-dashboard.sh -o nezha-dashboard.sh
+chmod +x nezha-dashboard.sh
+sudo ./nezha-dashboard.sh upgrade
+```
+
+You can pin a specific release with `INSTALL_VERSION=vX.Y.Z` for both install and upgrade:
+
+```bash
+sudo INSTALL_VERSION=vX.Y.Z ./nezha-dashboard.sh install
+sudo INSTALL_VERSION=vX.Y.Z ./nezha-dashboard.sh upgrade
+```
+
+You can also provide config values non-interactively through environment variables such as `NZ_ADMIN_LOGINS`, `NZ_OAUTH2_CLIENT_ID`, `NZ_OAUTH2_CLIENT_SECRET`, `NZ_GRPC_HOST`, and `NZ_ENABLE_TLS`.
 
 Agent install commands shown inside the dashboard now fetch scripts from this repository, but the downloaded agent binary still comes from the official `nezhahq/agent` release.
 

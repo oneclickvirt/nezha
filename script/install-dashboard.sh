@@ -2,7 +2,7 @@
 set -u
 
 REPO='oneclickvirt/nezha'
-SCRIPT_BRANCH='master'
+SCRIPT_BRANCH='v0-final'
 VERSION=''
 ARCH=''
 APP_DIR='/opt/nezha/dashboard'
@@ -192,7 +192,7 @@ build_release_urls() {
 
 build_repo_file_urls() {
   local relative_path="$1"
-  local direct_url="https://raw.githubusercontent.com/${REPO}/${SCRIPT_BRANCH}/${relative_path}"
+  local direct_url="https://raw.githubusercontent.com/${REPO}/refs/heads/${SCRIPT_BRANCH}/${relative_path}"
   local cdn
   for cdn in "${CDN_URLS[@]}"; do
     printf '%s\n' "${cdn}${direct_url}"

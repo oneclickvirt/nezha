@@ -1,5 +1,5 @@
 debug: false
-httpport: 80
+httpport: nz_site_port
 language: nz_language
 grpcport: nz_grpc_port
 grpchost: "nz_grpc_host"

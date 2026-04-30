@@ -2,11 +2,14 @@
 set -e
 
 SCRIPT_REPO='oneclickvirt/nezha'
-SCRIPT_BRANCH='master'
+SCRIPT_BRANCH='v0-final'
+RAW_SCRIPT_URL="https://raw.githubusercontent.com/${SCRIPT_REPO}/refs/heads/${SCRIPT_BRANCH}/script/install-agent.sh"
 SCRIPT_URLS=(
-  "https://cdn.jsdelivr.net/gh/${SCRIPT_REPO}@${SCRIPT_BRANCH}/script/install-agent.sh"
-  "https://fastly.jsdelivr.net/gh/${SCRIPT_REPO}@${SCRIPT_BRANCH}/script/install-agent.sh"
-  "https://raw.githubusercontent.com/${SCRIPT_REPO}/${SCRIPT_BRANCH}/script/install-agent.sh"
+  "https://cdn0.spiritlhl.top/${RAW_SCRIPT_URL}"
+  "http://cdn3.spiritlhl.net/${RAW_SCRIPT_URL}"
+  "http://cdn1.spiritlhl.net/${RAW_SCRIPT_URL}"
+  "http://cdn2.spiritlhl.net/${RAW_SCRIPT_URL}"
+  "${RAW_SCRIPT_URL}"
 )
 
 download_core_script() {
