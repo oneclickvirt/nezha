@@ -191,14 +191,12 @@ func (ma *memberAPI) delete(c *gin.Context) {
 	var err error
 	switch c.Param("model") {
 	case "server":
-		err := singleton.DB.Transaction(func(tx *gorm.DB) error {
-			err = singleton.DB.Unscoped().Delete(&model.Server{}, "id = ?", id).Error
-			if err != nil {
-				return err
+		err = singleton.DB.Transaction(func(tx *gorm.DB) error {
+			if e := tx.Unscoped().Delete(&model.Server{}, "id = ?", id).Error; e != nil {
+				return e
 			}
-			err = singleton.DB.Unscoped().Delete(&model.MonitorHistory{}, "server_id = ?", id).Error
-			if err != nil {
-				return err
+			if e := tx.Unscoped().Delete(&model.MonitorHistory{}, "server_id = ?", id).Error; e != nil {
+				return e
 			}
 			return nil
 		})
@@ -233,13 +231,13 @@ func (ma *memberAPI) delete(c *gin.Context) {
 	case "cron":
 		err = singleton.DB.Unscoped().Delete(&model.Cron{}, "id = ?", id).Error
 		if err == nil {
-			singleton.CronLock.RLock()
-			defer singleton.CronLock.RUnlock()
+			singleton.CronLock.Lock()
 			cr := singleton.Crons[id]
 			if cr != nil && cr.CronJobID != 0 {
 				singleton.Cron.Remove(cr.CronJobID)
 			}
 			delete(singleton.Crons, id)
+			singleton.CronLock.Unlock()
 		}
 	case "alert-rule":
 		err = singleton.DB.Unscoped().Delete(&model.AlertRule{}, "id = ?", id).Error
@@ -379,16 +377,25 @@ func (ma *memberAPI) addOrEditServer(c *gin.Context) {
 	}
 	if isEdit {
 		singleton.ServerLock.Lock()
-		s.CopyFromRunningServer(singleton.ServerList[s.ID])
+		old := singleton.ServerList[s.ID]
+		if old == nil {
+			singleton.ServerLock.Unlock()
+			c.JSON(http.StatusOK, model.Response{
+				Code:    http.StatusBadRequest,
+				Message: fmt.Sprintf("服务器 %d 不存在", s.ID),
+			})
+			return
+		}
+		s.CopyFromRunningServer(old)
 		// 如果修改了 Secret
-		if s.Secret != singleton.ServerList[s.ID].Secret {
-			// 删除旧 Secret-ID 绑定关系
-			singleton.SecretToID[s.Secret] = s.ID
+		if s.Secret != old.Secret {
 			// 设置新的 Secret-ID 绑定关系
-			delete(singleton.SecretToID, singleton.ServerList[s.ID].Secret)
+			singleton.SecretToID[s.Secret] = s.ID
+			// 删除旧 Secret-ID 绑定关系
+			delete(singleton.SecretToID, old.Secret)
 		}
 		// 如果修改了Tag
-		oldTag := singleton.ServerList[s.ID].Tag
+		oldTag := old.Tag
 		newTag := s.Tag
 		if newTag != oldTag {
 			index := -1
@@ -1131,8 +1138,12 @@ func (ma *memberAPI) batchDeleteServer(c *gin.Context) {
 }
 
 func onServerDelete(id uint64) {
-	tag := singleton.ServerList[id].Tag
-	delete(singleton.SecretToID, singleton.ServerList[id].Secret)
+	s, ok := singleton.ServerList[id]
+	if !ok || s == nil {
+		return
+	}
+	tag := s.Tag
+	delete(singleton.SecretToID, s.Secret)
 	delete(singleton.ServerList, id)
 	index := -1
 	for i := 0; i < len(singleton.ServerTagToIDList[tag]); i++ {

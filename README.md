@@ -24,32 +24,65 @@
 
 ## Install Dashboard
 
-Dashboard release assets are now published from this repository. Download the dashboard installer from the `v0-final` branch, then use `install` for a new deployment or `upgrade` for an existing one. The installer itself uses the same spiritlhl CDN acceleration pattern as `oneclickvirt/oneclickvirt` for release assets and repository templates, and falls back to raw GitHub sources when needed.
+Dashboard release assets are published from this repository. Download the dashboard installer from the `v0-final` branch, then use `install` for a new deployment or `upgrade` for an existing one. The installer uses spiritlhl CDN acceleration and falls back to raw GitHub when needed.
 
 ```bash
-curl -fsSL https://cdn.spiritlhl.net/https://github.com/oneclickvirt/nezha/blob/v0-final/script/install-dashboard.sh -o install-dashboard.sh
+curl -fsSL https://cdn0.spiritlhl.top/https://raw.githubusercontent.com/oneclickvirt/nezha/refs/heads/v0-final/script/install-dashboard.sh -o install-dashboard.sh
 chmod +x install-dashboard.sh
-sudo ./install-dashboard.sh
+sudo ./install-dashboard.sh install
 ```
 
-Upgrade an existing dashboard installation with the same script:
+Upgrade an existing installation:
 
 ```bash
-curl -fsSL https://cdn.spiritlhl.net/https://github.com/oneclickvirt/nezha/blob/v0-final/script/install-dashboard.sh -o install-dashboard.sh
-chmod +x install-dashboard.sh
 sudo ./install-dashboard.sh upgrade
 ```
 
-You can pin a specific release with `INSTALL_VERSION=vX.Y.Z` for both install and upgrade:
+Pin a specific release version:
 
 ```bash
 sudo INSTALL_VERSION=vX.Y.Z ./install-dashboard.sh install
 sudo INSTALL_VERSION=vX.Y.Z ./install-dashboard.sh upgrade
 ```
 
-You can also provide config values non-interactively through environment variables such as `NZ_ADMIN_LOGINS`, `NZ_OAUTH2_CLIENT_ID`, `NZ_OAUTH2_CLIENT_SECRET`, `NZ_GRPC_HOST`, and `NZ_ENABLE_TLS`.
+Config values can be provided non-interactively via environment variables: `NZ_ADMIN_LOGINS`, `NZ_OAUTH2_CLIENT_ID`, `NZ_OAUTH2_CLIENT_SECRET`, `NZ_GRPC_HOST`, `NZ_ENABLE_TLS`, etc.
 
-Agent install commands shown inside the dashboard now fetch scripts from this repository, but the downloaded agent binary still comes from the official `nezhahq/agent` release.
+Agent install commands shown inside the dashboard fetch scripts from this repository, but the agent binary itself comes from the official `nezhahq/agent` release.
+
+## Docker Deployment
+
+A Docker image is built and published to GHCR on every release:
+
+```
+ghcr.io/oneclickvirt/nezha-dashboard:latest
+```
+
+Quick start with `docker compose` using the provided template:
+
+```bash
+# Download the compose template
+curl -fsSL https://cdn0.spiritlhl.top/https://raw.githubusercontent.com/oneclickvirt/nezha/refs/heads/v0-final/script/docker-compose.yaml -o docker-compose.yaml
+
+# Create required directories and a minimal config
+mkdir -p data
+
+# Pull and start
+docker compose up -d
+```
+
+Or run directly without compose:
+
+```bash
+docker run -d \
+  --name nezha-dashboard \
+  --restart always \
+  -p 8008:80 \
+  -p 5555:5555 \
+  -v "$(pwd)/data:/dashboard/data" \
+  ghcr.io/oneclickvirt/nezha-dashboard:latest
+```
+
+The `docker-compose.yaml` template uses placeholder values (`nz_site_port`, `nz_grpc_port`, `nz_image_url`) that the `install-dashboard.sh` script replaces automatically during setup. If you manage Docker manually, substitute these with your actual values.
 
 ## Screenshots
 

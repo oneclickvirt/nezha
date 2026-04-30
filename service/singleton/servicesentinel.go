@@ -221,18 +221,23 @@ func (ss *ServiceSentinel) loadMonitorHistory() {
 	// 加载服务监控历史记录
 	var mhs []model.MonitorHistory
 	DB.Where("created_at > ? AND created_at < ?", today.AddDate(0, 0, -29), today).Find(&mhs)
-	var delayCount = make(map[int]int)
+	// delayCount[monitorID][dayIndex] — 每个监控器、每天独立计数，避免跨监控器混合平均
+	var delayCount = make(map[uint64]map[int]int)
 	for i := 0; i < len(mhs); i++ {
 		dayIndex := 28 - (int(today.Sub(mhs[i].CreatedAt).Hours()) / 24)
 		if dayIndex < 0 {
 			continue
 		}
-		ServiceSentinelShared.monthlyStatus[mhs[i].MonitorID].Delay[dayIndex] = (ServiceSentinelShared.monthlyStatus[mhs[i].MonitorID].Delay[dayIndex]*float32(delayCount[dayIndex]) + mhs[i].AvgDelay) / float32(delayCount[dayIndex]+1)
-		delayCount[dayIndex]++
-		ServiceSentinelShared.monthlyStatus[mhs[i].MonitorID].Up[dayIndex] += int(mhs[i].Up)
-		ServiceSentinelShared.monthlyStatus[mhs[i].MonitorID].TotalUp += mhs[i].Up
-		ServiceSentinelShared.monthlyStatus[mhs[i].MonitorID].Down[dayIndex] += int(mhs[i].Down)
-		ServiceSentinelShared.monthlyStatus[mhs[i].MonitorID].TotalDown += mhs[i].Down
+		mid := mhs[i].MonitorID
+		if delayCount[mid] == nil {
+			delayCount[mid] = make(map[int]int)
+		}
+		ServiceSentinelShared.monthlyStatus[mid].Delay[dayIndex] = (ServiceSentinelShared.monthlyStatus[mid].Delay[dayIndex]*float32(delayCount[mid][dayIndex]) + mhs[i].AvgDelay) / float32(delayCount[mid][dayIndex]+1)
+		delayCount[mid][dayIndex]++
+		ServiceSentinelShared.monthlyStatus[mid].Up[dayIndex] += int(mhs[i].Up)
+		ServiceSentinelShared.monthlyStatus[mid].TotalUp += mhs[i].Up
+		ServiceSentinelShared.monthlyStatus[mid].Down[dayIndex] += int(mhs[i].Down)
+		ServiceSentinelShared.monthlyStatus[mid].TotalDown += mhs[i].Down
 	}
 }
 
@@ -289,7 +294,9 @@ func (ss *ServiceSentinel) OnMonitorDelete(id uint64) {
 	delete(ss.serviceStatusToday, id)
 
 	// 停掉定时任务
-	Cron.Remove(ss.monitors[id].CronJobID)
+	if m := ss.monitors[id]; m != nil {
+		Cron.Remove(m.CronJobID)
+	}
 	delete(ss.monitors, id)
 
 	delete(ss.monthlyStatus, id)

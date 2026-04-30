@@ -134,18 +134,25 @@ func OnDeleteAlert(id uint64) {
 
 // checkStatus 检查报警规则并发送报警
 func checkStatus() {
+	// 先用 ServerLock 快速拷贝一份当前服务器指针列表，随即释放锁，
+	// 避免后续的 DB 查询（周期流量规则）长时间占用 ServerLock。
+	ServerLock.RLock()
+	serverSnapshot := make([]*model.Server, 0, len(ServerList))
+	for _, s := range ServerList {
+		serverSnapshot = append(serverSnapshot, s)
+	}
+	ServerLock.RUnlock()
+
 	AlertsLock.RLock()
 	defer AlertsLock.RUnlock()
-	ServerLock.RLock()
-	defer ServerLock.RUnlock()
 
 	for _, alert := range Alerts {
 		// 跳过未启用
 		if !alert.Enabled() {
 			continue
 		}
-		for _, server := range ServerList {
-			// 监测点
+		for _, server := range serverSnapshot {
+			// 监测点（周期流量规则在此处可能触发 DB 查询，已在 ServerLock 释放后执行）
 			alertsStore[alert.ID][server.ID] = append(alertsStore[alert.
 				ID][server.ID], alert.Snapshot(AlertsCycleTransferStatsStore[alert.ID], server, DB))
 			// 发送通知，分为触发报警和恢复通知

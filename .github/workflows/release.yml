@@ -99,7 +99,7 @@ jobs:
             script/nezha-dashboard.service \
             script/docker-compose.yaml \
             script/config.yaml; do
-            curl -fsSL "https://purge.jsdelivr.net/gh/${REPO_LOWER}@master/${file}" >/dev/null || true
+            curl -fsSL "https://purge.jsdelivr.net/gh/${REPO_LOWER}@v0-final/${file}" >/dev/null || true
           done
 
       # Gitee release sync is disabled.
