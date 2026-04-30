@@ -102,13 +102,14 @@ jobs:
             curl -fsSL "https://purge.jsdelivr.net/gh/${REPO_LOWER}@master/${file}" >/dev/null || true
           done
 
-      - name: Trigger sync
-        env:
-          GH_REPO: ${{ github.repository }}
-          GH_TOKEN: ${{ github.token }}
-          GH_DEBUG: api
-        run: |
-          gh workflow run sync-release.yml
+      # Gitee release sync is disabled.
+      # - name: Trigger sync
+      #   env:
+      #     GH_REPO: ${{ github.repository }}
+      #     GH_TOKEN: ${{ github.token }}
+      #     GH_DEBUG: api
+      #   run: |
+      #     gh workflow run sync-release.yml
 
   release-docker:
     runs-on: ubuntu-latest
@@ -142,12 +143,13 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
 
-      - name: Log in to the AliyunCS
-        uses: docker/login-action@master
-        with:
-          registry: registry.cn-shanghai.aliyuncs.com
-          username: ${{ secrets.ALI_USER }}
-          password: ${{ secrets.ALI_PAT }}
+      # Aliyun image publishing is disabled.
+      # - name: Log in to the AliyunCS
+      #   uses: docker/login-action@master
+      #   with:
+      #     registry: registry.cn-shanghai.aliyuncs.com
+      #     username: ${{ secrets.ALI_USER }}
+      #     password: ${{ secrets.ALI_PAT }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -158,12 +160,13 @@ jobs:
       - name: Set up image name
         run: |
           GHCR_IMAGE_NAME=$(echo "ghcr.io/${{ github.repository_owner }}/nezha-dashboard" | tr '[:upper:]' '[:lower:]')
-          if [ ${{ github.repository_owner }} = "naiba" ]
-            then ALI_IMAGE_NAME=$(echo "registry.cn-shanghai.aliyuncs.com/naibahq/nezha-dashboard")
-            else ALI_IMAGE_NAME=$(echo "registry.cn-shanghai.aliyuncs.com/${{ github.repository_owner }}/nezha-dashboard" | tr '[:upper:]' '[:lower:]')
-          fi
           echo "GHCR_IMAGE_NAME=$GHCR_IMAGE_NAME" >> $GITHUB_OUTPUT
-          echo "ALI_IMAGE_NAME=$ALI_IMAGE_NAME" >> $GITHUB_OUTPUT
+          # Aliyun image publishing is disabled.
+          # if [ ${{ github.repository_owner }} = "naiba" ]
+          #   then ALI_IMAGE_NAME=$(echo "registry.cn-shanghai.aliyuncs.com/naibahq/nezha-dashboard")
+          #   else ALI_IMAGE_NAME=$(echo "registry.cn-shanghai.aliyuncs.com/${{ github.repository_owner }}/nezha-dashboard" | tr '[:upper:]' '[:lower:]')
+          # fi
+          # echo "ALI_IMAGE_NAME=$ALI_IMAGE_NAME" >> $GITHUB_OUTPUT
         id: image-name
 
       - name: Build dasbboard image And Push
@@ -176,5 +179,5 @@ jobs:
           tags: |
             ${{ steps.image-name.outputs.GHCR_IMAGE_NAME }}:latest
             ${{ steps.image-name.outputs.GHCR_IMAGE_NAME }}:${{ steps.extract_branch.outputs.tag }}
-            ${{ steps.image-name.outputs.ALI_IMAGE_NAME }}:latest
-            ${{ steps.image-name.outputs.ALI_IMAGE_NAME }}:${{ steps.extract_branch.outputs.tag }}
+            # ${{ steps.image-name.outputs.ALI_IMAGE_NAME }}:latest
+            # ${{ steps.image-name.outputs.ALI_IMAGE_NAME }}:${{ steps.extract_branch.outputs.tag }}
