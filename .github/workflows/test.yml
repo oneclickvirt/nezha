@@ -25,9 +25,9 @@ jobs:
     env:
       GO111MODULE: on
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.23.x"
           
@@ -40,6 +40,6 @@ jobs:
           
       - name: Run Gosec Security Scanner
         if: runner.os == 'Linux'
-        uses: securego/gosec@master
+        uses: securego/gosec@deb54465fea23d19a77f037e11e6589021f8501d # v2.29.0
         with:
           args: --exclude=G104,G402,G115,G203 ./...

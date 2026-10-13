@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Generate Contributors Images
-        uses: jaywcjlove/github-action-contributors@main
+        uses: jaywcjlove/github-action-contributors@1b74a53d91995ba1b910a997908bd86ec4869fed # v2.1.0
         id: contributors
         with:
           filter-author: (renovate\[bot\]|renovate-bot|dependabot\[bot\])
@@ -19,7 +19,7 @@ jobs:
           avatarMargin: 8
 
       - name: Modify htmlTable README.md
-        uses: jaywcjlove/github-action-modify-file-content@main
+        uses: jaywcjlove/github-action-modify-file-content@846621fb3d427134c437737454a055901d955147 # v2.1.0
         with:
           message: update contributors[no ci]
           openDelimiter: '<!--GAMFC_DELIMITER-->'
