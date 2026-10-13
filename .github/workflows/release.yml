@@ -1,23 +1,19 @@
 name: Release
-
-on:
-  push:
-    tags:
-      - "v*"
-
 jobs:
   build:
     strategy:
       fail-fast: true
       matrix:
-        goos: [linux, windows]
-        goarch: [amd64]
+        goos:
+        - linux
+        - windows
+        goarch:
+        - amd64
         include:
-          - goos: linux
-            goarch: s390x
-          - goos: linux
-            goarch: arm64
-
+        - goos: linux
+          goarch: s390x
+        - goos: linux
+          goarch: arm64
     name: Build artifacts
     runs-on: ubuntu-latest
     container:
@@ -25,157 +21,142 @@ jobs:
     env:
       GOOS: ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
+      GOPROXY: https://proxy.golang.org|direct
     steps:
-      - run: git config --global --add safe.directory /__w/nezha/nezha
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Fetch IPInfo GeoIP Database
-        if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
-        env:
-          IPINFO_TOKEN: ${{ secrets.IPINFO_TOKEN }}
-        run: |
-          rm pkg/geoip/geoip.db
-          wget -qO pkg/geoip/geoip.db https://ipinfo.io/data/free/country.mmdb?token=${IPINFO_TOKEN}
-
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: "1.23.x"
-
-      - name: Build
-        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: build --single-target --clean --skip=validate
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: dashboard-${{ env.GOOS }}-${{ env.GOARCH }}
-          path: |
-            ./dist/*/*
-
+    - name: Load trusted network recovery helpers
+      shell: bash
+      run: |
+        set -euo pipefail
+        curl --fail --silent --show-error --location --connect-timeout 15 --max-time 90 --retry 3 --retry-max-time 180 --retry-connrefused "https://raw.githubusercontent.com/oneclickvirt/nezha/v0-final/.github/scripts/ci_network.sh" -o "$RUNNER_TEMP/ci-network.sh"
+    - run: git config --global --add safe.directory /__w/nezha/nezha
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: Fetch IPInfo GeoIP Database
+      if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+      env:
+        IPINFO_TOKEN: ${{ secrets.IPINFO_TOKEN }}
+      run: |
+        source "$RUNNER_TEMP/ci-network.sh"
+        rm pkg/geoip/geoip.db
+        wget -qO pkg/geoip/geoip.db https://ipinfo.io/data/free/country.mmdb?token=${IPINFO_TOKEN}
+      shell: bash
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version: 1.23.x
+    - name: Build
+      uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+      with:
+        distribution: goreleaser
+        version: ~> v2
+        args: build --single-target --clean --skip=validate
+    - name: Upload artifacts
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: dashboard-${{ env.GOOS }}-${{ env.GOARCH }}
+        path: |
+          ./dist/*/*
   release:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
     needs: build
     name: Release
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          path: ./assets
-
-      - name: Archive and compress binaries
-        run: |
-          find assets -type f ! -name '*.zip' | while read -r file; do
-            chmod +x "$file" 2>/dev/null || true
-            dir=$(dirname "$file")
-            filename=$(basename "$file")
-            fileWithoutExt="${filename%.*}"
-            zip -jqr "$dir/$fileWithoutExt.zip" "$file"
-          done
-
-      - name: Release
-        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
-        with:
-          artifacts: "assets/*/*/*.zip"
-          generateReleaseNotes: true
-          allowUpdates: true
-          replacesArtifacts: true
-
-      - name: Purge jsdelivr cache
-        run: |
-          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          for file in \
-            script/install.sh \
-            script/install_en.sh \
-            script/install.command \
-            script/install.ps1 \
-            script/install-agent.sh \
-            script/install-dashboard.sh \
-            script/nezha-dashboard \
-            script/nezha-dashboard.service \
-            script/docker-compose.yaml \
-            script/config.yaml; do
-            curl -fsSL "https://purge.jsdelivr.net/gh/${REPO_LOWER}@v0-final/${file}" >/dev/null || true
-          done
-
-      # Gitee release sync is disabled.
-      # - name: Trigger sync
-      #   env:
-      #     GH_REPO: ${{ github.repository }}
-      #     GH_TOKEN: ${{ github.token }}
-      #     GH_DEBUG: api
-      #   run: |
-      #     gh workflow run sync-release.yml
-
+    - name: Load trusted network recovery helpers
+      shell: bash
+      run: |
+        set -euo pipefail
+        curl --fail --silent --show-error --location --connect-timeout 15 --max-time 90 --retry 3 --retry-max-time 180 --retry-connrefused "https://raw.githubusercontent.com/oneclickvirt/nezha/v0-final/.github/scripts/ci_network.sh" -o "$RUNNER_TEMP/ci-network.sh"
+    - name: Download artifacts
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        path: ./assets
+    - name: Archive and compress binaries
+      run: |
+        find assets -type f ! -name '*.zip' | while read -r file; do
+          chmod +x "$file" 2>/dev/null || true
+          dir=$(dirname "$file")
+          filename=$(basename "$file")
+          fileWithoutExt="${filename%.*}"
+          zip -jqr "$dir/$fileWithoutExt.zip" "$file"
+        done
+    - name: Release
+      uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
+      with:
+        artifacts: assets/*/*/*.zip
+        generateReleaseNotes: true
+        allowUpdates: true
+        replacesArtifacts: true
+    - name: Purge jsdelivr cache
+      run: |
+        source "$RUNNER_TEMP/ci-network.sh"
+        REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+        for file in \
+          script/install.sh \
+          script/install_en.sh \
+          script/install.command \
+          script/install.ps1 \
+          script/install-agent.sh \
+          script/install-dashboard.sh \
+          script/nezha-dashboard \
+          script/nezha-dashboard.service \
+          script/docker-compose.yaml \
+          script/config.yaml; do
+          curl -fsSL "https://purge.jsdelivr.net/gh/${REPO_LOWER}@v0-final/${file}" >/dev/null || true
+        done
+      shell: bash
   release-docker:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
     needs: build
     name: Release Docker images
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Download artifacts
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          path: ./assets
-
-      - name: Fix permissions
-        run: |
-          chmod -R +x ./assets/*
-          mkdir dist
-          mv ./assets/*/*/* ./dist
-
-      - name: Extract branch name
-        run: |
-          export TAG_NAME=$(echo ${GITHUB_REF#refs/tags/})
-          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
-        id: extract_branch
-
-      - name: Log into GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ github.token }}
-
-      # Aliyun image publishing is disabled.
-      # - name: Log in to the AliyunCS
-      #   uses: docker/login-action@master
-      #   with:
-      #     registry: registry.cn-shanghai.aliyuncs.com
-      #     username: ${{ secrets.ALI_USER }}
-      #     password: ${{ secrets.ALI_PAT }}
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-
-      - name: Set up image name
-        run: |
-          GHCR_IMAGE_NAME=$(echo "ghcr.io/${{ github.repository_owner }}/nezha-dashboard" | tr '[:upper:]' '[:lower:]')
-          echo "GHCR_IMAGE_NAME=$GHCR_IMAGE_NAME" >> $GITHUB_OUTPUT
-          # Aliyun image publishing is disabled.
-          # if [ ${{ github.repository_owner }} = "naiba" ]
-          #   then ALI_IMAGE_NAME=$(echo "registry.cn-shanghai.aliyuncs.com/naibahq/nezha-dashboard")
-          #   else ALI_IMAGE_NAME=$(echo "registry.cn-shanghai.aliyuncs.com/${{ github.repository_owner }}/nezha-dashboard" | tr '[:upper:]' '[:lower:]')
-          # fi
-          # echo "ALI_IMAGE_NAME=$ALI_IMAGE_NAME" >> $GITHUB_OUTPUT
-        id: image-name
-
-      - name: Build dasbboard image And Push
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64,linux/s390x
-          push: true
-          tags: |
-            ${{ steps.image-name.outputs.GHCR_IMAGE_NAME }}:latest
-            ${{ steps.image-name.outputs.GHCR_IMAGE_NAME }}:${{ steps.extract_branch.outputs.tag }}
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: Download artifacts
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        path: ./assets
+    - name: Fix permissions
+      run: |
+        chmod -R +x ./assets/*
+        mkdir dist
+        mv ./assets/*/*/* ./dist
+    - name: Extract branch name
+      run: |
+        export TAG_NAME=$(echo ${GITHUB_REF#refs/tags/})
+        echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+      id: extract_branch
+    - name: Log into GHCR
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ github.token }}
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+    - name: Set up image name
+      run: |
+        GHCR_IMAGE_NAME=$(echo "ghcr.io/${{ github.repository_owner }}/nezha-dashboard" | tr '[:upper:]' '[:lower:]')
+        echo "GHCR_IMAGE_NAME=$GHCR_IMAGE_NAME" >> $GITHUB_OUTPUT
+        # Aliyun image publishing is disabled.
+        # if [ ${{ github.repository_owner }} = "naiba" ]
+        #   then ALI_IMAGE_NAME=$(echo "registry.cn-shanghai.aliyuncs.com/naibahq/nezha-dashboard")
+        #   else ALI_IMAGE_NAME=$(echo "registry.cn-shanghai.aliyuncs.com/${{ github.repository_owner }}/nezha-dashboard" | tr '[:upper:]' '[:lower:]')
+        # fi
+        # echo "ALI_IMAGE_NAME=$ALI_IMAGE_NAME" >> $GITHUB_OUTPUT
+      id: image-name
+    - name: Build dasbboard image And Push
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: .
+        file: ./Dockerfile
+        platforms: linux/amd64,linux/arm64,linux/s390x
+        push: true
+        tags: |
+          ${{ steps.image-name.outputs.GHCR_IMAGE_NAME }}:latest
+          ${{ steps.image-name.outputs.GHCR_IMAGE_NAME }}:${{ steps.extract_branch.outputs.tag }}
+'on':
+  push:
+    tags:
+    - v*
