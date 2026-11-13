@@ -165,4 +165,4 @@ You can change the dashboard language in the settings page (`/setting`) after th
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=oneclickvirt/nezha&type=Timeline)](https://star-history.com/#oneclickvirt/nezha&Timeline)
+[![Star History Chart](https://api.star-history.com/chart?repos=oneclickvirt/nezha&type=timeline)](https://star-history.com/#oneclickvirt/nezha&Timeline)
